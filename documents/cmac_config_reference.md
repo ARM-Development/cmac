@@ -234,7 +234,15 @@ linear units, i.e. `10^(dBZ / 10)`, before the exponent is applied)
 | `radar_height_offset` | Height offset (m) for the beam-blockage calculation |
 | `cbb_blockage_threshold` | *(has default 0.80)* Cumulative beam-blockage fraction above which a gate is flagged `terrain_blockage` |
 
+### Gate-ID classifier (optional)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `gate_id_method` | `cmac_fuzzy` | Which classifier fills `gate_id`. `cmac_fuzzy` is CMAC's own five-class fuzzy scheme; `radar_palette` delegates to `radar_palette.gateid`. See [Gate-ID backends](#gate-id-backends). |
+
 ### Fuzzy-logic classification (optional — see below for format)
+
+Read only when `gate_id_method` is `cmac_fuzzy`.
 
 | Key | Meaning |
 |---|---|
@@ -242,6 +250,138 @@ linear units, i.e. `10^(dBZ / 10)`, before the exponent is applied)
 | `hard_const` | Custom hard constraints, replacing the default list. |
 | `fuzzy_tex_start` *(default 2.0)*, `fuzzy_tex_end` *(default 2.1)* | Velocity-texture range used by the fuzzy scorer |
 | `fuzzy_score_median_size` *(default `(3, 4)`)* | Median-filter kernel applied to the fuzzy score |
+
+### radar-palette classification (optional)
+
+Read only when `gate_id_method` is `radar_palette`. Every key left `null`
+takes that classifier's own documented default, so pin one only where your
+radar needs to differ.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `gate_id_class_map` | `null` | Class name -> CMAC category, overriding the default fold for the classes named. Partial maps are merged over the default. Targets must be one of `multi_trip`, `rain`, `snow`, `no_scatter`, `melting`. |
+| `gate_id_freezing_level` | `null` | Freezing level in m MSL for the melting-layer constraints. `null` derives it from the mapped sounding, which is what a site with a sounding should use. |
+| `gate_id_apply_offsets` | `true` | Add `ref_offset` / `zdr_offset` to the uncorrected moments the classifier sees. See [Gate-ID backends](#gate-id-backends). |
+| `gate_id_unclassified_policy` | `warn` | What to do when the classifier declines a volume. `warn` reports and continues; `error` fails the run. See [Gate-ID backends](#gate-id-backends). |
+| `gate_id_snr_min` | `3.0` | Gates below this SNR are forced to `no_scatter` before scoring. `null` disables the test. |
+| `gate_id_min_run` | `3` | Class runs shorter than this many gates along a ray are dissolved. |
+| `gate_id_despeckle_keep_dbz` | `30.0` | Reflectivity at or above which a gate is never despeckled or gated out. |
+| `gate_id_incoherent_frac` | `null` | Velocity texture, as a fraction of the uniform-random-phase limit, above which a gate cannot be first-trip weather. Instrument-specific in practice — see below. `0` disables the test. |
+| `gate_id_texture_window` | `4` | Footprint of the texture operator, in gates and rays. |
+| `gate_id_publish_margin` | `false` | Also write `scatterer_classification_margin`, the winning minus runner-up score. Doubles the classification storage in the output file. |
+
+`gate_id_incoherent_frac` is exposed per radar because it was measured not to
+transfer between instruments: the fraction of precipitation gates
+(Z >= 25 dBZ, RhoHV > 0.95) it rejects ranges from under 1% on weak-echo
+C-band RHIs to 24.6% on an S-band NEXRAD volume. Treat it as a per-instrument
+calibration, not a universal constant.
+
+#### Which categories reach which product
+
+The `gate_id` field is the mask behind every masked product in the file, and
+each step includes a different set of categories:
+
+| Step | Categories included |
+|---|---|
+| Velocity dealiasing, velocity texture | `rain`, `melting`, `snow` |
+| Z-PHI attenuation correction, `corrected_reflectivity`, `specific_attenuation`, KDP filtering | `rain`, `melting`, `snow` |
+| `rain_rate_A`, `rain_rate_Kdp`, `rain_rate_Z` | `rain` |
+| `snow_rate_*` | `snow` |
+
+The melting layer is a valid radar return and is included in the Z-PHI
+correction, so `corrected_reflectivity` covers melting-layer gates. (Before
+this branch that filter admitted `gate_id` 1 and 2 as bare literals, which
+excluded melting and also assumed the fuzzy classifier's category order; the
+codes now come from the field's own `notes` string.)
+
+#### Gate-ID backends
+
+Both backends publish the same `gate_id` field with the same five categories
+in the same order — `0:multi_trip,1:rain,2:snow,3:no_scatter,4:melting`, with
+`clutter` (5) and `terrain_blockage` (6) appended by `cmac()` when it has a
+clutter field, a vendor classification mask or a geotiff. That ordering is a
+contract: `cmac.gate_id.get_gate_id_categories` derives each code from its
+position in the field's `notes` string, and the gate filter used before the
+Z-PHI attenuation correction reads codes 1 and 2 as literals.
+
+The `radar_palette` backend classifies into eleven classes and folds them
+onto those five. The fold is lossy, so the eleven-class result is published
+in full alongside it as `scatterer_classification` with CF
+`flag_values`/`flag_meanings`:
+
+| radar-palette class | CMAC category |
+|---|---|
+| `light_rain`, `moderate_rain`, `heavy_rain` | `rain` |
+| `ice_snow`, `graupel_hail` | `snow` |
+| `melting_wet` | `melting` |
+| `multi_trip` | `multi_trip` |
+| `no_scatter`, `unclassified`, `clutter`, `biological` | `no_scatter` |
+
+`clutter` and `biological` fold to `no_scatter` rather than to CMAC's own
+`clutter` category because that category is code 5 and exists only when
+`cmac()` was given the inputs to add it; claiming it here would either leave
+a gap in the positional `notes` contract or duplicate a label. Both classes
+are excluded from meteorological gates either way, and both remain readable
+in `scatterer_classification`.
+
+`radar_palette` is not a CMAC dependency — it is imported only when a
+configuration selects this backend. The classifier lives in the package's
+`gateid` module, which is not yet in radar-palette's released main branch;
+install it from the development branch:
+
+```
+pip install 'radar-palette @ git+https://github.com/scollis/radar-palette@gateid'
+```
+
+Selecting the backend without it installed raises an `ImportError` naming
+both that install and the `cmac_fuzzy` fallback.
+
+Two behaviours of this backend are CMAC's own and worth knowing about:
+
+- **Classification runs on the uncorrected moments.** For each moment the
+  backend takes the `uncorrected_*` field where the volume publishes one —
+  `uncorrected_reflectivity_h`, `uncorrected_differential_reflectivity`,
+  `uncorrected_copol_correlation_coeff`, `uncorrected_differential_phase`,
+  `uncorrected_mean_doppler_velocity_h`, `uncorrected_spectral_width_h`, and
+  the uncorrected NCP and SNR where they exist — and falls back to the
+  radar's `field_names` entry otherwise. Deciding what the instrument saw is
+  a judgement about the measurement, and the unprefixed fields on an ARM `a1`
+  volume already carry vendor clutter filtering, thresholding and (on the
+  CACTI and TRACER generations) attenuation correction, whose definition
+  varies by site and instrument generation. Legacy platforms (MDV-era X-SAPR,
+  NEXRAD) publish no uncorrected moments, so there the config remains the
+  source of truth. Exactly one candidate per moment is handed to the
+  classifier, so its own internal preference order cannot pick a different
+  field. The field each moment resolved to is printed when `verbose=True`.
+- Because `cmac()` applies `ref_offset` and `zdr_offset` in place to the
+  *configured* reflectivity and ZDR, and an uncorrected moment has not been
+  through that, the backend adds those offsets to its own view of them —
+  calibration is a property of the instrument, not a correction. Set
+  `gate_id_apply_offsets: false` to classify on the raw values instead. A
+  moment that fell back to the configured field is never offset twice.
+- **A volume the classifier declines is reported, not folded to clear air.**
+  `radar_palette` skips sweeps it judges unsuitable — a narrow-elevation-span
+  RHI, for example — and returns `unclassified` for every gate in them, which
+  folds onto `no_scatter` and is then indistinguishable from empty sky: every
+  masked product in the file would be empty with nothing saying why. When any
+  sweep is skipped, or more than half the gates come back `unclassified`, the
+  backend warns with the sweep numbers and elevation spans, and writes
+  `gate_id_unclassified_gates` and `gate_id_skipped_sweeps` to the file. Set
+  `gate_id_unclassified_policy: error` to make it a hard failure instead. Four
+  TRACER C-SAPR2 cell-tracking RHIs (16-76 rays, elevation spans of 3.7 to
+  18.8 degrees) hit this; the fuzzy classifier handles them, labelling 1,186 to
+  15,434 gates rain on three of the four.
+- Spectrum width has no `field_names` key (CMAC's own classifier does not use
+  it, `radar_palette` does), so it is probed for by name — `spectrum_width`
+  on MDV and NEXRAD volumes, `spectral_width` on modern ARM CfRadial. Add a
+  `spectral_width` key to `field_names` to pin it.
+- A gate with no finite *measured* moment cannot carry a hydrometeor label.
+  The underlying classifier tests whether a feature is present rather than
+  whether its value at a gate is finite, and gate temperature is finite
+  everywhere, so empty-sky gates can otherwise score above zero on
+  temperature alone. The number of gates demoted is written to the output
+  file as the `gate_id_no_evidence_gates` global attribute, alongside
+  `gate_id_method` and `gate_id_temperature_source`.
 
 ### Other tunables (all optional, with defaults from `_DEFAULT_PROCESSING_TUNABLES`)
 

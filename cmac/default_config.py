@@ -1330,6 +1330,60 @@ _DEFAULT_PROCESSING_TUNABLES = {
     'rain_rate_valid_max': 400,
     'snow_rate_valid_max': 500,
     'cbb_blockage_threshold': 0.80,
+    # Whether a vendor classification_mask field, when present, is allowed to
+    # relabel gates as clutter. True preserves the behaviour this overlay has
+    # always had. Set it false where the mask's clutter bit is set at
+    # essentially every gate, which is the case on TRACER C-SAPR2 a1 volumes
+    # and turns the whole volume into clutter; see cmac_radar.cmac.
+    'use_classification_mask': True,
+    # Which classifier fills the gate_id field. 'cmac_fuzzy' is CMAC's own
+    # five-class fuzzy scheme (cmac_processing.do_my_fuzz) and is the default
+    # everywhere, so behaviour is unchanged unless a config asks otherwise.
+    # 'radar_palette' delegates to radar_palette.gateid's eleven-class
+    # classifier and folds the result onto the same five categories, keeping
+    # the full class set in the scatterer_classification field. See
+    # cmac.gate_id_backends.
+    'gate_id_method': 'cmac_fuzzy',
+    # The remaining gate_id_* keys are read only by the radar_palette backend.
+    # Each of the tuning knobs left as None takes that classifier's own
+    # documented default, so a value is pinned here only where CMAC has a
+    # reason to differ.
+    #
+    # Class name -> CMAC category, overriding
+    # gate_id_backends.RADAR_PALETTE_TO_CMAC for the classes named. Partial
+    # maps are merged over the default, so only the classes being rerouted
+    # need listing.
+    'gate_id_class_map': None,
+    # Freezing level in m MSL handed to the classifier's melting-layer
+    # constraints. None derives it from the mapped sounding, which is what a
+    # site with a sounding should use; pin a number only when the sounding is
+    # known to be unrepresentative.
+    'gate_id_freezing_level': None,
+    # Classification runs on the uncorrected moments where the volume
+    # publishes them (see gate_id_backends.UNCORRECTED_CANDIDATES). Those have
+    # not been through the in-place ref_offset/zdr_offset that cmac() applies
+    # to the configured fields, so the offsets are added to the classifier's
+    # view of them. Set false to classify on the raw instrument values.
+    'gate_id_apply_offsets': True,
+    # What to do when radar_palette declines to classify a volume -- it skips
+    # sweeps it judges unsuitable (a narrow-elevation-span RHI, for instance)
+    # and returns 'unclassified' for every gate in them, which folds to
+    # no_scatter and is then indistinguishable from clear air. 'warn' reports
+    # it and continues; 'error' makes it a hard failure, which is what a
+    # production run that must not emit an empty mask should use.
+    'gate_id_unclassified_policy': 'warn',
+    'gate_id_snr_min': 3.0,
+    'gate_id_min_run': 3,
+    'gate_id_despeckle_keep_dbz': 30.0,
+    # Velocity texture, as a fraction of the uniform-random-phase limit, above
+    # which a gate cannot be first-trip weather. Measured to be
+    # instrument-specific rather than universal, so it is exposed per radar;
+    # 0 disables the test, None takes radar_palette's own constant.
+    'gate_id_incoherent_frac': None,
+    'gate_id_texture_window': 4,
+    # The winning-minus-runner-up score is a useful diagnostic but doubles the
+    # classification storage in the output file, so publishing it is opt-in.
+    'gate_id_publish_margin': False,
 }
 
 # Plot-field vmin/vmax pairs used by the quicklooks
