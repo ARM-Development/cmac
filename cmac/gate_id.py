@@ -78,6 +78,55 @@ def get_gate_id_categories(gate_id_field):
         "categories.")
 
 
+def append_gate_id_category(gate_id_field, category):
+    """
+    Ensure ``category`` is documented on a ``gate_id`` field, and return the
+    integer code it occupies.
+
+    The ``notes`` attribute is positional: :func:`get_gate_id_categories`
+    reads a category's code from where its label sits in the string, not from
+    the integer printed next to it. Appending the same label twice therefore
+    shifts every subsequent code by one -- a volume carrying both a
+    ``ground_clutter`` field and a vendor ``classification_mask`` had
+    ``,5:clutter`` appended once for each, after which ``clutter`` resolved to
+    6 while the gates themselves had been set to 5.
+
+    Appending through this function instead is idempotent: a category already
+    present returns its existing code and the notes string is left alone. The
+    code is returned rather than assumed so callers do not have to hard-code
+    it, which is what made the duplication possible in the first place.
+
+    Parameters
+    ----------
+    gate_id_field : dict
+        A Py-ART field dictionary with a ``notes`` attribute, e.g.
+        ``radar.fields['gate_id']``. Modified in place.
+    category : str
+        Category label, e.g. ``'clutter'``.
+
+    Returns
+    -------
+    code : int
+        The integer code for ``category``.
+
+    """
+    if 'notes' not in gate_id_field:
+        raise KeyError(
+            "Cannot append a category to a 'gate_id' field with no 'notes' "
+            "attribute describing the categories it already has.")
+
+    labels = _labels_from_notes(gate_id_field['notes'])
+    if category in labels:
+        return labels.index(category)
+
+    code = len(labels)
+    gate_id_field['notes'] = '%s,%d:%s' % (
+        gate_id_field['notes'], code, category)
+    gate_id_field['valid_min'] = 0
+    gate_id_field['valid_max'] = code
+    return code
+
+
 def gate_id_has_category(gate_id_field, category):
     """
     Return True if ``category`` is one of the documented categories of a
