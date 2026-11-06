@@ -1,9 +1,8 @@
 """Unit tests for the alternative gate-ID backends.
 
 These build their radars with ``pyart.testing`` rather than downloading a
-volume, so the whole module runs offline. The tests that need the classifier
-itself skip when ``radar_palette`` is not installed, since CMAC does not
-depend on it.
+volume, so the whole module runs offline. The classifier is vendored by CMAC
+and therefore does not require a separately installed ``radar_palette``.
 """
 
 import sys
@@ -352,11 +351,12 @@ def test_sounding_freezing_level_ignores_the_fill_value(radar):
     assert sounding_freezing_level(radar) is None
 
 
-def test_missing_radar_palette_gives_an_actionable_error(monkeypatch):
-    """Selecting the backend without the package must explain the fix."""
+def test_vendored_radar_palette_is_independent_of_external_package(monkeypatch):
+    """The backend does not depend on a separately installed package."""
     monkeypatch.setitem(sys.modules, 'radar_palette.gateid', None)
-    with pytest.raises(ImportError, match="gate_id_method='cmac_fuzzy'"):
-        _import_radar_palette()
+    entry_points, single = _import_radar_palette()
+    assert callable(entry_points.gate_id)
+    assert single.NAME_TO_CODE['no_scatter'] == 1
 
 
 @pytest.mark.skipif(not radar_palette_available(),

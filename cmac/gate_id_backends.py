@@ -161,33 +161,27 @@ _TEMPERATURE_FILL_FLOOR = -500.0
 
 
 def radar_palette_available():
-    """Return True if ``radar_palette.gateid`` can be imported."""
+    """Return True if CMAC's vendored gate-ID classifier can be imported."""
     try:
-        import radar_palette.gateid  # noqa: F401
+        from ._vendor import radar_palette  # noqa: F401
     except ImportError:
         return False
     return True
 
 
 def _import_radar_palette():
-    """Import and return the ``radar_palette.gateid`` entry points.
+    """Import and return CMAC's vendored radar-palette entry points.
 
     Raised as an ``ImportError`` with an actionable message rather than a bare
     ``ModuleNotFoundError`` from somewhere deep in the VAP, because selecting
     this backend is a configuration choice and the fix is an install.
     """
     try:
-        from radar_palette.gateid import entry_points, single
+        from ._vendor.radar_palette.gateid import entry_points, single
     except ImportError as err:
         raise ImportError(
-            "gate_id_method='radar_palette' requires radar_palette.gateid, "
-            "which CMAC does not depend on: it is imported only when a radar "
-            "configuration selects this backend. The gateid module is not in "
-            "radar-palette's released main branch yet -- install from the "
-            "gateid development branch (pip install "
-            "'radar-palette @ git+https://github.com/scollis/radar-palette"
-            "@gateid'), or set gate_id_method='cmac_fuzzy' in the radar "
-            "configuration to use CMAC's own fuzzy classifier."
+            "CMAC's vendored radar-palette gate-ID implementation could not "
+            "be imported. Check the CMAC installation."
         ) from err
     return entry_points, single
 

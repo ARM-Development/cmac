@@ -1,0 +1,9 @@
+This directory contains the radar-palette gate-ID implementation vendored for
+CMAC under the radar-palette BSD-3-Clause license (see LICENSE).
+
+Upstream project: https://github.com/scollis/radar-palette
+Upstream branch: gateid
+Upstream commit: 38ca2f9e81e0ebc21e04b3004dd065ae90e3b3e5
+
+Vendored modules are the gateid classifier, feature extraction, multi-trip
+geometry, public entry point, and the Py-ART flavor adapter required by CMAC.
