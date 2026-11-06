@@ -324,11 +324,9 @@ a gap in the positional `notes` contract or duplicate a label. Both classes
 are excluded from meteorological gates either way, and both remain readable
 in `scatterer_classification`.
 
-The gate-ID implementation from radar-palette is vendored in CMAC, so this
-backend does not require a separate radar-palette installation. CMAC vendors
-the `gateid` classifier and the Py-ART adapter from the upstream `gateid`
-branch; see `cmac/_vendor/radar_palette/VENDORED.txt` for the pinned commit
-and license.
+The gate-ID implementation from radar-palette is included in CMAC, so this
+backend does not require a separate radar-palette installation. The `gateid`
+classifier and its Py-ART adapter live in the `cmac.radar_palette` package.
 
 Two behaviours of this backend are CMAC's own and worth knowing about:
 

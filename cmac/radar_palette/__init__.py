@@ -1,7 +1,7 @@
-"""Vendored radar-palette components used by CMAC's gate-ID backend.
+"""Radar-palette components used by CMAC's gate-ID backend.
 
 Only the gate-ID implementation is included here; the rest of radar-palette
-is intentionally not part of CMAC's vendored surface.
+is intentionally not part of CMAC's surface.
 """
 
 from . import gateid

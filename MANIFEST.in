@@ -2,4 +2,3 @@
 # [tool.setuptools.cmdclass]; it is not part of any package, so it has to be
 # added to the sdist explicitly or building from the sdist fails.
 include _cmac_build.py
-recursive-include cmac/_vendor/radar_palette *.py LICENSE VENDORED.txt

@@ -1,7 +1,7 @@
 """Unit tests for the alternative gate-ID backends.
 
 These build their radars with ``pyart.testing`` rather than downloading a
-volume, so the whole module runs offline. The classifier is vendored by CMAC
+volume, so the whole module runs offline. The classifier is included in CMAC
 and therefore does not require a separately installed ``radar_palette``.
 """
 
@@ -351,7 +351,7 @@ def test_sounding_freezing_level_ignores_the_fill_value(radar):
     assert sounding_freezing_level(radar) is None
 
 
-def test_vendored_radar_palette_is_independent_of_external_package(monkeypatch):
+def test_included_radar_palette_is_independent_of_external_package(monkeypatch):
     """The backend does not depend on a separately installed package."""
     monkeypatch.setitem(sys.modules, 'radar_palette.gateid', None)
     entry_points, single = _import_radar_palette()

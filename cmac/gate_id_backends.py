@@ -161,26 +161,26 @@ _TEMPERATURE_FILL_FLOOR = -500.0
 
 
 def radar_palette_available():
-    """Return True if CMAC's vendored gate-ID classifier can be imported."""
+    """Return True if CMAC's gate-ID classifier can be imported."""
     try:
-        from ._vendor import radar_palette  # noqa: F401
+        from . import radar_palette  # noqa: F401
     except ImportError:
         return False
     return True
 
 
 def _import_radar_palette():
-    """Import and return CMAC's vendored radar-palette entry points.
+    """Import and return CMAC's radar-palette entry points.
 
     Raised as an ``ImportError`` with an actionable message rather than a bare
     ``ModuleNotFoundError`` from somewhere deep in the VAP, because selecting
     this backend is a configuration choice and the fix is an install.
     """
     try:
-        from ._vendor.radar_palette.gateid import entry_points, single
+        from .radar_palette.gateid import entry_points, single
     except ImportError as err:
         raise ImportError(
-            "CMAC's vendored radar-palette gate-ID implementation could not "
+            "CMAC's radar-palette gate-ID implementation could not "
             "be imported. Check the CMAC installation."
         ) from err
     return entry_points, single

@@ -71,9 +71,6 @@ ext-modules = [
 include = ["cmac*"]
 namespaces = false
 
-[tool.setuptools.package-data]
-"cmac._vendor.radar_palette" = ["LICENSE", "VENDORED.txt"]
-
 [tool.setuptools.cmdclass]
 build_ext = "_cmac_build.build_ext"
 
