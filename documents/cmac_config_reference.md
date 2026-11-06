@@ -324,17 +324,9 @@ a gap in the positional `notes` contract or duplicate a label. Both classes
 are excluded from meteorological gates either way, and both remain readable
 in `scatterer_classification`.
 
-`radar_palette` is not a CMAC dependency — it is imported only when a
-configuration selects this backend. The classifier lives in the package's
-`gateid` module, which is not yet in radar-palette's released main branch;
-install it from the development branch:
-
-```
-pip install 'radar-palette @ git+https://github.com/scollis/radar-palette@gateid'
-```
-
-Selecting the backend without it installed raises an `ImportError` naming
-both that install and the `cmac_fuzzy` fallback.
+The gate-ID implementation from radar-palette is included in CMAC, so this
+backend does not require a separate radar-palette installation. The `gateid`
+classifier and its Py-ART adapter live in the `cmac.radar_palette` package.
 
 Two behaviours of this backend are CMAC's own and worth knowing about:
 
