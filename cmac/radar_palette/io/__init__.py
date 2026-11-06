@@ -22,8 +22,6 @@ layer is maintained alongside the formats and handles metadata this package has
 no business duplicating.
 """
 
-from __future__ import annotations
-
 from .flavors import (
     GridFlavor,
     RadarFlavor,

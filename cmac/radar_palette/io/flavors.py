@@ -36,8 +36,6 @@ assignment via ``add_field`` *does* write through --- the asymmetry is why this 
 easy to get wrong.)
 """
 
-from __future__ import annotations
-
 import tempfile
 from enum import Enum
 from pathlib import Path

@@ -18,8 +18,6 @@ ODIM name lists must agree or the two object families would resolve different
 fields from the same volume. A test enforces that.
 """
 
-from __future__ import annotations
-
 import numpy as np
 
 from . import single

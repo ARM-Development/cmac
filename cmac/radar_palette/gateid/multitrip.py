@@ -35,8 +35,6 @@ radars. *Bull. Amer. Meteor. Soc.*, 80, 389-406. Second-trip signatures in
 polarimetric moments.
 """
 
-from __future__ import annotations
-
 import numpy as np
 
 __all__ = [

@@ -10,8 +10,6 @@ Computation happens on the Py-ART surface, as elsewhere in this package, because
 that is where the gate-geometry helpers live.
 """
 
-from __future__ import annotations
-
 import numpy as np
 
 from ..gateid import single
