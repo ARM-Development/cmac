@@ -50,8 +50,6 @@ Testing a procedure for automatic classification of hydrometeor types.
 carry the strongest discriminating power.
 """
 
-from __future__ import annotations
-
 import numpy as np
 
 # Integer codes are part of the file format; append, never renumber.
