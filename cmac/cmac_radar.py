@@ -422,15 +422,18 @@ def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
         radar.fields["unfolded_differential_phase"] = copy.deepcopy(
                 radar.fields[field_config['input_phidp_field']])
 
-    kdp_gates = copy.deepcopy(cmac_gates)
-    kdp_gates.exclude_above('height', fzl)
     if cmac_config['kdp_method'] == 'lp':
+        kdp_gates = copy.deepcopy(cmac_gates)
+        kdp_gates.exclude_above('height', fzl)
         phidp, kdp = pyart.correct.phase_proc_lp_gf(
             radar, gatefilter=kdp_gates, offset=ref_offset, debug=True,
             LP_solver='cylp', nowrap=phidp_nowrap, fzl=fzl, self_const=self_const,
             phidp_field=field_config['input_phidp_field'],
             refl_field=field_config['reflectivity'])
     elif cmac_config['kdp_method'] == 'bringi':
+        # Bringi's ray-wise retrieval is valid throughout the volume. Unlike
+        # the LP retrieval, do not discard gates above the freezing level.
+        kdp_gates = copy.deepcopy(cmac_gates)
         fill_value = -9999.
         dp = radar.fields[field_config['input_phidp_field']]['data']
         dz = radar.fields[field_config['reflectivity']]['data'] 
@@ -474,9 +477,10 @@ def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
         
 
     print("Processed phase")
-    # We do not use KDP, phase above freezing level
+    # LP excludes phase above the freezing level; Bringi does not.
     kdp_gates = copy.deepcopy(cmac_gates)
-    kdp_gates.exclude_above('height', fzl)
+    if cmac_config['kdp_method'] == 'lp':
+        kdp_gates.exclude_above('height', fzl)
     
     phidp, kdp = synchronize_phase_field_masks(phidp, kdp)
     radar.add_field('corrected_differential_phase', phidp,
