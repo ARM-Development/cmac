@@ -23,6 +23,21 @@ from .gate_id_backends import radar_palette_gate_id
 from . import csu_kdp
 
 
+def _get_field_fill_value(field):
+    """Return a scalar missing-data value from a Py-ART field dictionary."""
+    for key in ('missing_value', '_FillValue'):
+        value = field.get(key)
+        if value is not None:
+            value = np.asarray(value).reshape(-1)
+            if value.size == 1 and np.isfinite(value[0]):
+                return float(value[0])
+    data = field.get('data')
+    if np.ma.isMaskedArray(data) and np.isfinite(data.fill_value):
+        return float(data.fill_value)
+    raise ValueError(
+        "Bringi requires a missing-data value, but the field defines none")
+
+
 def add_clutter_map(radar, clutter_radar, field_name='ground_clutter'):
     """Add a clutter map, aligning PPI sweeps by elevation.
 
@@ -434,9 +449,11 @@ def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
         # Bringi's ray-wise retrieval is valid throughout the volume. Unlike
         # the LP retrieval, do not discard gates above the freezing level.
         kdp_gates = copy.deepcopy(cmac_gates)
-        fill_value = -9999.
-        dp = radar.fields[field_config['input_phidp_field']]['data']
-        dz = radar.fields[field_config['reflectivity']]['data'] 
+        dp_field = radar.fields[field_config['input_phidp_field']]
+        dz_field = radar.fields[field_config['reflectivity']]
+        fill_value = _get_field_fill_value(dp_field)
+        dp = dp_field['data']
+        dz = dz_field['data']
         # calc_kdp_bringi assumes PhiDP has the system phase offset removed
         # and is already unfolded. Feeding it the raw phase carries the
         # offset (~220 degrees at BNF) through to the Z-PHI attenuation,
@@ -459,15 +476,18 @@ def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
             if verbose:
                 print('##    PhiDP system phase offset removed: '
                       '%.2f degrees' % sys_phase)
-        dp = dp.filled(fill_value)
-        dz = dz.filled(fill_value)
+        dp_mask = np.ma.getmaskarray(dp)
+        dz_mask = np.ma.getmaskarray(dz)
+        dp = np.ma.filled(dp, fill_value)
+        dz = np.ma.filled(dz, fill_value)
         rng = np.tile(radar.range['data'], (radar.nrays, 1)) / 1e3
         kdp, phidp, _ = csu_kdp.calc_kdp_bringi(dp=dp, dz=dz, rng=rng,
             bad=fill_value)
             
-        kdp_data = np.ma.masked_where(
-                kdp_gates.gate_excluded, kdp).filled(-9999.)
-        phidp_data = np.ma.masked_where(kdp_gates.gate_excluded, phidp).filled(-9999.)
+        invalid = (kdp_gates.gate_excluded | dp_mask | dz_mask |
+                   (kdp == fill_value) | (phidp == fill_value))
+        kdp_data = np.ma.masked_where(invalid, kdp)
+        phidp_data = np.ma.masked_where(invalid, phidp)
         phidp = copy.deepcopy(radar.fields[field_config['input_phidp_field']])
         kdp = pyart.config.get_metadata("corrected_specific_differential_phase")
         phidp["data"] = phidp_data

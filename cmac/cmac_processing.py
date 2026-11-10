@@ -405,11 +405,19 @@ def remove_sys_phase(phidp, sys_phase, wrap_min=-90.0):
 
 def fix_phase_fields(orig_kdp, orig_phidp, rrange, happy_kdp,
                      max_kdp=15.0):
-
-    orig_kdp['data'][happy_kdp.gate_excluded] = 0.0
-    orig_kdp['data'][orig_kdp['data'] > max_kdp] = max_kdp
-    interg = integrate.cumulative_trapezoid(orig_kdp['data'], rrange, axis=1)
-    orig_phidp['data'][:, 0:-1] = interg/len(rrange)
+    kdp_data = np.ma.asanyarray(orig_kdp['data'])
+    phidp_data = np.ma.asanyarray(orig_phidp['data'])
+    mask = (np.ma.getmaskarray(kdp_data) |
+            np.ma.getmaskarray(phidp_data) |
+            happy_kdp.gate_excluded)
+    kdp_values = np.ma.filled(kdp_data, 0.0).copy()
+    kdp_values[happy_kdp.gate_excluded] = 0.0
+    kdp_values[kdp_values > max_kdp] = max_kdp
+    interg = integrate.cumulative_trapezoid(kdp_values, rrange, axis=1)
+    phidp_values = np.ma.filled(phidp_data, 0.0).copy()
+    phidp_values[:, 0:-1] = interg/len(rrange)
+    orig_kdp['data'] = np.ma.array(kdp_values, mask=mask)
+    orig_phidp['data'] = np.ma.array(phidp_values, mask=mask)
     return orig_phidp, orig_kdp
 
 
