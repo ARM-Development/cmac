@@ -13,7 +13,8 @@ import pyart
 import netCDF4
 
 from .cmac_processing import (
-    do_my_fuzz, get_melt, get_texture, fix_phase_fields, gen_clutter_field_from_refl, beam_block,
+    do_my_fuzz, get_melt, get_texture, fix_phase_fields,
+    synchronize_phase_field_masks, gen_clutter_field_from_refl, beam_block,
     snow_rate, rain_rate, get_sys_phase, remove_sys_phase)
 from .config import (get_cmac_values, get_field_names, get_metadata,
                      get_zs_relationships, get_default_metadata)
@@ -417,6 +418,7 @@ def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
     kdp_gates = copy.deepcopy(cmac_gates)
     kdp_gates.exclude_above('height', fzl)
     
+    phidp, kdp = synchronize_phase_field_masks(phidp, kdp)
     radar.add_field('corrected_differential_phase', phidp,
                     replace_existing=True)
     radar.add_field('corrected_specific_diff_phase', kdp,
@@ -427,8 +429,10 @@ def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
     phidp_filt, kdp_filt = fix_phase_fields(
         copy.deepcopy(kdp), copy.deepcopy(phidp), radar.range['data'],
         kdp_gates, max_kdp=cmac_config.get('max_kdp', 15.0))
+    phidp_filt, kdp_filt = synchronize_phase_field_masks(
+        phidp_filt, kdp_filt)
     
-    radar.add_field('filtered_corrected_differential_phase', phidp,
+    radar.add_field('filtered_corrected_differential_phase', phidp_filt,
                     replace_existing=True)
     radar.fields[
         'filtered_corrected_differential_phase']['long_name'] = 'Filtered corrected differential propagation phase shift'
