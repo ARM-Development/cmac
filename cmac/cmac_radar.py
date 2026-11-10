@@ -459,15 +459,18 @@ def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
             if verbose:
                 print('##    PhiDP system phase offset removed: '
                       '%.2f degrees' % sys_phase)
-        dp = dp.filled(fill_value)
-        dz = dz.filled(fill_value)
+        dp_mask = np.ma.getmaskarray(dp)
+        dz_mask = np.ma.getmaskarray(dz)
+        dp = np.ma.filled(dp, fill_value)
+        dz = np.ma.filled(dz, fill_value)
         rng = np.tile(radar.range['data'], (radar.nrays, 1)) / 1e3
         kdp, phidp, _ = csu_kdp.calc_kdp_bringi(dp=dp, dz=dz, rng=rng,
             bad=fill_value)
             
-        kdp_data = np.ma.masked_where(
-                kdp_gates.gate_excluded, kdp).filled(-9999.)
-        phidp_data = np.ma.masked_where(kdp_gates.gate_excluded, phidp).filled(-9999.)
+        invalid = (kdp_gates.gate_excluded | dp_mask | dz_mask |
+                   (kdp == fill_value) | (phidp == fill_value))
+        kdp_data = np.ma.masked_where(invalid, kdp)
+        phidp_data = np.ma.masked_where(invalid, phidp)
         phidp = copy.deepcopy(radar.fields[field_config['input_phidp_field']])
         kdp = pyart.config.get_metadata("corrected_specific_differential_phase")
         phidp["data"] = phidp_data
