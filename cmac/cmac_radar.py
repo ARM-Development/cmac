@@ -22,6 +22,66 @@ from .gate_id import append_gate_id_category, get_gate_id_categories
 from .gate_id_backends import radar_palette_gate_id
 from . import csu_kdp
 
+
+def add_clutter_map(radar, clutter_radar, field_name='ground_clutter'):
+    """Add a clutter map, aligning PPI sweeps by elevation.
+
+    Clutter maps and data volumes may have different sweep and ray counts.
+    For PPI data, fixed angle is the sweep elevation, so it is used to match
+    sweeps. Within a matched sweep, each radar ray receives the nearest
+    clutter-map azimuth. Unmatched radar sweeps remain uncluttered.
+    """
+    if field_name not in clutter_radar.fields:
+        raise KeyError("clutter map has no %r field" % field_name)
+
+    target_shape = (radar.nrays, radar.ngates)
+    clutter_data = np.ma.asanyarray(clutter_radar.fields[field_name]['data'])
+    if radar.scan_type != 'ppi':
+        if clutter_data.shape != target_shape:
+            raise ValueError(
+                "clutter field shape %s does not match radar shape %s"
+                % (clutter_data.shape, target_shape))
+        field = copy.deepcopy(clutter_radar.fields[field_name])
+        radar.add_field(field_name, field, replace_existing=True)
+        return
+
+    matched = np.zeros(target_shape, dtype=clutter_data.dtype)
+    radar_angles = np.asarray(radar.fixed_angle['data'], dtype=float)
+    clutter_angles = np.asarray(
+        clutter_radar.fixed_angle['data'], dtype=float)
+    clutter_azimuth = np.asarray(clutter_radar.azimuth['data'], dtype=float)
+    clutter_values = np.ma.filled(clutter_data, 0)
+
+    for radar_sweep, radar_angle in enumerate(radar_angles):
+        clutter_sweep = int(np.abs(clutter_angles - radar_angle).argmin())
+        angle_error = abs(clutter_angles[clutter_sweep] - radar_angle)
+        if angle_error > 0.05:
+            warnings.warn(
+                'No clutter-map sweep matches radar elevation %.4f; '
+                'leaving that sweep uncluttered.' % radar_angle,
+                UserWarning)
+            continue
+
+        radar_start, radar_end = radar.get_start_end(radar_sweep)
+        clutter_start, clutter_end = clutter_radar.get_start_end(
+            clutter_sweep)
+        radar_indices = np.arange(int(radar_start), int(radar_end) + 1)
+        clutter_indices = np.arange(
+            int(clutter_start), int(clutter_end) + 1)
+        radar_azimuth = np.asarray(radar.azimuth['data'])[radar_indices]
+        map_azimuth = clutter_azimuth[clutter_indices]
+        azimuth_distance = np.abs(
+            (radar_azimuth[:, None] - map_azimuth[None, :] + 180.0)
+            % 360.0 - 180.0)
+        nearest = azimuth_distance.argmin(axis=1)
+        matched[radar_indices] = clutter_values[
+            clutter_indices[nearest]]
+
+    field = copy.deepcopy(clutter_radar.fields[field_name])
+    field['data'] = matched
+    radar.add_field(field_name, field, replace_existing=True)
+
+
 def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
          meta_append=None, verbose=True, snow_density=None, snowfall=True,
          config_file=None):
