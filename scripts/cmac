@@ -5,11 +5,11 @@ import argparse
 from pathlib import Path
 
 import netCDF4
-import numpy as np
 import pyart
 import xarray as xr
 
 from cmac import (
+    add_clutter_map,
     area_coverage,
     cmac,
     get_cmac_values,
@@ -70,24 +70,7 @@ def main():
             print('## Reading dictionary...')
             print('## Adding clutter field..')
         clutter_radar = pyart.io.read(str(args.clutter_file))
-        clutter_field_dict = clutter_radar.fields['ground_clutter'].copy()
-        # For XSAPR data at NSA, sometimes only 3 of 6 sweeps are present;
-        # copy clutter information from the bottom sweeps only.
-        if clutter_radar.nsweeps > radar.nsweeps:
-            fname = next(iter(radar.fields))
-            clutter_field_dict['data'] = np.zeros_like(
-                radar.fields[fname]['data'])
-            for i, azi_angle in enumerate(radar.fixed_angle['data']):
-                ind = np.argwhere(
-                    clutter_radar.fixed_angle['data'] == azi_angle)
-                if len(ind) > 0:
-                    clutter = clutter_radar.get_field(
-                        int(ind), 'ground_clutter')
-                    start, end = radar.get_start_end(i)
-                    clutter_field_dict['data'][
-                        int(start):int(end + 1)] = clutter
-        radar.add_field(
-            'ground_clutter', clutter_field_dict, replace_existing=True)
+        add_clutter_map(radar, clutter_radar)
         del clutter_radar
 
     cmac_radar = cmac(

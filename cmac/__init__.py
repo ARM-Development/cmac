@@ -18,7 +18,7 @@ more.
 
 """
 
-from .cmac_radar import cmac, area_coverage
+from .cmac_radar import add_clutter_map, cmac, area_coverage
 from .cmac_ppi_quicklooks import quicklooks_ppi
 from .cmac_rhi_quicklooks import quicklooks_rhi
 from .cmac_processing import snr_and_sounding, do_my_fuzz

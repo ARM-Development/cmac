@@ -13,13 +13,74 @@ import pyart
 import netCDF4
 
 from .cmac_processing import (
-    do_my_fuzz, get_melt, get_texture, fix_phase_fields, gen_clutter_field_from_refl, beam_block,
+    do_my_fuzz, get_melt, get_texture, fix_phase_fields,
+    synchronize_phase_field_masks, gen_clutter_field_from_refl, beam_block,
     snow_rate, rain_rate, get_sys_phase, remove_sys_phase)
 from .config import (get_cmac_values, get_field_names, get_metadata,
                      get_zs_relationships, get_default_metadata)
 from .gate_id import append_gate_id_category, get_gate_id_categories
 from .gate_id_backends import radar_palette_gate_id
 from . import csu_kdp
+
+
+def add_clutter_map(radar, clutter_radar, field_name='ground_clutter'):
+    """Add a clutter map, aligning PPI sweeps by elevation.
+
+    Clutter maps and data volumes may have different sweep and ray counts.
+    For PPI data, fixed angle is the sweep elevation, so it is used to match
+    sweeps. Within a matched sweep, each radar ray receives the nearest
+    clutter-map azimuth. Unmatched radar sweeps remain uncluttered.
+    """
+    if field_name not in clutter_radar.fields:
+        raise KeyError("clutter map has no %r field" % field_name)
+
+    target_shape = (radar.nrays, radar.ngates)
+    clutter_data = np.ma.asanyarray(clutter_radar.fields[field_name]['data'])
+    if radar.scan_type != 'ppi':
+        if clutter_data.shape != target_shape:
+            raise ValueError(
+                "clutter field shape %s does not match radar shape %s"
+                % (clutter_data.shape, target_shape))
+        field = copy.deepcopy(clutter_radar.fields[field_name])
+        radar.add_field(field_name, field, replace_existing=True)
+        return
+
+    matched = np.zeros(target_shape, dtype=clutter_data.dtype)
+    radar_angles = np.asarray(radar.fixed_angle['data'], dtype=float)
+    clutter_angles = np.asarray(
+        clutter_radar.fixed_angle['data'], dtype=float)
+    clutter_azimuth = np.asarray(clutter_radar.azimuth['data'], dtype=float)
+    clutter_values = np.ma.filled(clutter_data, 0)
+
+    for radar_sweep, radar_angle in enumerate(radar_angles):
+        clutter_sweep = int(np.abs(clutter_angles - radar_angle).argmin())
+        angle_error = abs(clutter_angles[clutter_sweep] - radar_angle)
+        if angle_error > 0.05:
+            warnings.warn(
+                'No clutter-map sweep matches radar elevation %.4f; '
+                'leaving that sweep uncluttered.' % radar_angle,
+                UserWarning)
+            continue
+
+        radar_start, radar_end = radar.get_start_end(radar_sweep)
+        clutter_start, clutter_end = clutter_radar.get_start_end(
+            clutter_sweep)
+        radar_indices = np.arange(int(radar_start), int(radar_end) + 1)
+        clutter_indices = np.arange(
+            int(clutter_start), int(clutter_end) + 1)
+        radar_azimuth = np.asarray(radar.azimuth['data'])[radar_indices]
+        map_azimuth = clutter_azimuth[clutter_indices]
+        azimuth_distance = np.abs(
+            (radar_azimuth[:, None] - map_azimuth[None, :] + 180.0)
+            % 360.0 - 180.0)
+        nearest = azimuth_distance.argmin(axis=1)
+        matched[radar_indices] = clutter_values[
+            clutter_indices[nearest]]
+
+    field = copy.deepcopy(clutter_radar.fields[field_name])
+    field['data'] = matched
+    radar.add_field(field_name, field, replace_existing=True)
+
 
 def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
          meta_append=None, verbose=True, snow_density=None, snowfall=True,
@@ -361,15 +422,18 @@ def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
         radar.fields["unfolded_differential_phase"] = copy.deepcopy(
                 radar.fields[field_config['input_phidp_field']])
 
-    kdp_gates = copy.deepcopy(cmac_gates)
-    kdp_gates.exclude_above('height', fzl)
     if cmac_config['kdp_method'] == 'lp':
+        kdp_gates = copy.deepcopy(cmac_gates)
+        kdp_gates.exclude_above('height', fzl)
         phidp, kdp = pyart.correct.phase_proc_lp_gf(
             radar, gatefilter=kdp_gates, offset=ref_offset, debug=True,
             LP_solver='cylp', nowrap=phidp_nowrap, fzl=fzl, self_const=self_const,
             phidp_field=field_config['input_phidp_field'],
             refl_field=field_config['reflectivity'])
     elif cmac_config['kdp_method'] == 'bringi':
+        # Bringi's ray-wise retrieval is valid throughout the volume. Unlike
+        # the LP retrieval, do not discard gates above the freezing level.
+        kdp_gates = copy.deepcopy(cmac_gates)
         fill_value = -9999.
         dp = radar.fields[field_config['input_phidp_field']]['data']
         dz = radar.fields[field_config['reflectivity']]['data'] 
@@ -413,10 +477,12 @@ def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
         
 
     print("Processed phase")
-    # We do not use KDP, phase above freezing level
+    # LP excludes phase above the freezing level; Bringi does not.
     kdp_gates = copy.deepcopy(cmac_gates)
-    kdp_gates.exclude_above('height', fzl)
+    if cmac_config['kdp_method'] == 'lp':
+        kdp_gates.exclude_above('height', fzl)
     
+    phidp, kdp = synchronize_phase_field_masks(phidp, kdp)
     radar.add_field('corrected_differential_phase', phidp,
                     replace_existing=True)
     radar.add_field('corrected_specific_diff_phase', kdp,
@@ -427,8 +493,10 @@ def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
     phidp_filt, kdp_filt = fix_phase_fields(
         copy.deepcopy(kdp), copy.deepcopy(phidp), radar.range['data'],
         kdp_gates, max_kdp=cmac_config.get('max_kdp', 15.0))
+    phidp_filt, kdp_filt = synchronize_phase_field_masks(
+        phidp_filt, kdp_filt)
     
-    radar.add_field('filtered_corrected_differential_phase', phidp,
+    radar.add_field('filtered_corrected_differential_phase', phidp_filt,
                     replace_existing=True)
     radar.fields[
         'filtered_corrected_differential_phase']['long_name'] = 'Filtered corrected differential propagation phase shift'
