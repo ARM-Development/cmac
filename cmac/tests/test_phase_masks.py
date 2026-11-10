@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from cmac.cmac_processing import fix_phase_fields, synchronize_phase_field_masks
+from cmac.cmac_radar import _get_field_fill_value
 
 
 def test_synchronize_phase_field_masks_uses_union_of_masks():
@@ -34,4 +35,12 @@ def test_fix_phase_fields_does_not_integrate_fill_values():
     np.testing.assert_array_equal(
         np.ma.getmaskarray(filtered_kdp['data']),
         [[False, True, True]])
+
+
+def test_get_field_fill_value_prefers_missing_value():
+    assert _get_field_fill_value({
+        'missing_value': -9999,
+        '_FillValue': -32767,
+    }) == -9999.0
+    assert _get_field_fill_value({'_FillValue': -32767}) == -32767.0
 
