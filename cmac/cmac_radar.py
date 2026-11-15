@@ -38,6 +38,20 @@ def _get_field_fill_value(field):
         "Bringi requires a missing-data value, but the field defines none")
 
 
+def _get_bringi_options(cmac_config):
+    """Return validated Bringi filter options from a CMAC configuration."""
+    nfilter = cmac_config.get('bringi_nfilter', 1)
+    window = cmac_config.get('bringi_window', 3.0)
+    if (isinstance(nfilter, (bool, np.bool_)) or
+            not isinstance(nfilter, (int, np.integer)) or nfilter < 1):
+        raise ValueError('bringi_nfilter must be a positive integer')
+    if (isinstance(window, (bool, np.bool_)) or
+            not isinstance(window, (int, float, np.integer, np.floating)) or
+            not np.isfinite(window) or window <= 0):
+        raise ValueError('bringi_window must be a positive finite number')
+    return {'nfilter': int(nfilter), 'window': float(window)}
+
+
 def add_clutter_map(radar, clutter_radar, field_name='ground_clutter'):
     """Add a clutter map, aligning PPI sweeps by elevation.
 
@@ -448,6 +462,7 @@ def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
     elif cmac_config['kdp_method'] == 'bringi':
         # Bringi's ray-wise retrieval is valid throughout the volume. Unlike
         # the LP retrieval, do not discard gates above the freezing level.
+        bringi_options = _get_bringi_options(cmac_config)
         kdp_gates = copy.deepcopy(cmac_gates)
         dp_field = radar.fields[field_config['input_phidp_field']]
         dz_field = radar.fields[field_config['reflectivity']]
@@ -482,7 +497,7 @@ def cmac(radar, sonde, config, geotiff=None, flip_velocity=False,
         dz = np.ma.filled(dz, fill_value)
         rng = np.tile(radar.range['data'], (radar.nrays, 1)) / 1e3
         kdp, phidp, _ = csu_kdp.calc_kdp_bringi(dp=dp, dz=dz, rng=rng,
-            bad=fill_value)
+            bad=fill_value, **bringi_options)
             
         invalid = (kdp_gates.gate_excluded | dp_mask | dz_mask |
                    (kdp == fill_value) | (phidp == fill_value))

@@ -151,6 +151,8 @@ def test_processing_defaults_present_for_all_radars():
         cfg = get_cmac_values(radar)
         assert cfg['snow_density'] == 0.073
         assert cfg['phidp_nowrap'] == 50
+        assert cfg['bringi_nfilter'] == 1
+        assert cfg['bringi_window'] == 3.0
         assert cfg['phidp_despeckle_size'] == 49
         assert cfg['melt_fzl_ceiling'] == 5000.0
         assert cfg['melt_fzl_replacement'] == 3500.0
@@ -185,6 +187,8 @@ PROCESSING_OVERRIDE_YAML = textwrap.dedent("""
       xsapr_i5_ppi:
         snow_density: 0.10
         phidp_nowrap: 80
+        bringi_nfilter: 2
+        bringi_window: 6.0
         melt_fzl_ceiling: 6000.0
         area_coverage_precip_threshold: 5.0
         cbb_blockage_threshold: 0.6
@@ -218,6 +222,8 @@ def test_yaml_overrides_processing_tunables(processing_override_config):
     cfg = get_cmac_values('xsapr_i5_ppi', config_file=processing_override_config)
     assert cfg['snow_density'] == 0.10
     assert cfg['phidp_nowrap'] == 80
+    assert cfg['bringi_nfilter'] == 2
+    assert cfg['bringi_window'] == 6.0
     assert cfg['melt_fzl_ceiling'] == 6000.0
     assert cfg['area_coverage_precip_threshold'] == 5.0
     assert cfg['cbb_blockage_threshold'] == 0.6

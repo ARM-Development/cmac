@@ -99,6 +99,9 @@ cmac_values:
     rain_rate_a_coef_Kdp: 25.1
     rain_rate_b_coef_Kdp: 0.777
     kdp_method: bringi
+    # CSU Bringi FIR settings. The window is in km.
+    bringi_nfilter: 1
+    bringi_window: 3.0
     # PhiDP system phase offset in degrees. Leave as null to estimate it
     # from each volume; set a number to pin it.
     phidp_sys_phase: null

@@ -214,6 +214,8 @@ them will raise `KeyError` the first time `cmac()` runs.
 | Key | Meaning |
 |---|---|
 | `kdp_method` | `"bringi"` (CSU KDP, default if unset) or `"lp"` (linear-programming, needs COIN-OR/CyLP) |
+| `bringi_nfilter` | `1` — number of FIR filter iterations used by the CSU Bringi KDP method |
+| `bringi_window` | `3.0` — Bringi FIR window size in km; the resulting filter order must be even |
 
 ### Rain rate coefficients (required): `rate = A * moment^B`
 
