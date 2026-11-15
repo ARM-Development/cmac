@@ -1312,6 +1312,10 @@ _DEFAULT_GLOBAL_METADATA = {
 _DEFAULT_PROCESSING_TUNABLES = {
     'snow_density': 0.073,
     'phidp_nowrap': 50,
+    # Bringi CSU KDP FIR settings. The window is in km and is passed through
+    # to csu_kdp.calc_kdp_bringi; nfilter is the number of FIR passes.
+    'bringi_nfilter': 1,
+    'bringi_window': 3.0,
     'kdp_phase_proc_max': 10.0,
     'phidp_despeckle_size': 49,
     'corrected_velocity_valid_min': -100.0,
